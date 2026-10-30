@@ -26,7 +26,7 @@ This repository contains all production-ready Python SDK scripts, Pydantic extra
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/mohankrishnamurthy/gemini-4-architectural-engineering.git
+   git clone https://github.com/leomohan/gemini-4-architectural-engineering.git
    cd gemini-4-architectural-engineering
    ```
 
