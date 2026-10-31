@@ -23,10 +23,7 @@ def process_pdf_contract_audit(pdf_file_path: str) -> ContractAuditSchema:
     Ingests a raw multi-page PDF document, extracts structured audit data 
     using Gemini 4 Argon with guaranteed schema adherence and explicit thinking controls.
     """
-    client = genai.Client(
-        api_key=os.getenv("GEMINI_API_KEY"),
-        enterprise=True
-    )
+    client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
     print(f"Uploading document: {pdf_file_path} to Gemini File API...")
     uploaded_file = client.files.upload(file=pdf_file_path)
@@ -46,7 +43,6 @@ def process_pdf_contract_audit(pdf_file_path: str) -> ContractAuditSchema:
 
     config = types.GenerateContentConfig(
         system_instruction=system_rules,
-        temperature=0.0,
         response_mime_type="application/json",
         response_schema=ContractAuditSchema,
         thinking_config=types.ThinkingConfig(
@@ -56,20 +52,26 @@ def process_pdf_contract_audit(pdf_file_path: str) -> ContractAuditSchema:
 
     print("Executing extraction pipeline with Gemini 4 Argon (Thinking Level: LOW)...")
     
-    response = client.models.generate_content(
-        model="gemini-4-argon",
-        contents=[uploaded_file, prompt],
-        config=config
-    )
+    try:
+        response = client.models.generate_content(
+            model="gemini-4-argon",
+            contents=[uploaded_file, prompt],
+            config=config
+        )
+    finally:
+        client.files.delete(name=uploaded_file.name)
 
-    client.files.delete(name=uploaded_file.name)
+    if not response.text:
+        raise ValueError(f"No response text returned (prompt_feedback={response.prompt_feedback}).")
 
     audit_result = ContractAuditSchema.model_validate_json(response.text)
     return audit_result
 
 if __name__ == "__main__":
     sample_pdf = "sample_enterprise_contract.pdf"
-    if os.path.exists(sample_pdf):
-        result = process_pdf_contract_audit(sample_pdf)
-        print("\n--- EXTRACTED AUDIT JSON ---")
-        print(result.model_dump_json(indent=2))
+    if not os.path.exists(sample_pdf):
+        raise SystemExit(f"Sample file not found: {sample_pdf}. Add a contract PDF and rerun.")
+
+    result = process_pdf_contract_audit(sample_pdf)
+    print("\n--- EXTRACTED AUDIT JSON ---")
+    print(result.model_dump_json(indent=2))
