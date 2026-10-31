@@ -1,21 +1,22 @@
 import os
 import time
-from typing import Dict, Any
+from datetime import date
+from typing import Dict, Any, Optional
 from google import genai
 from google.genai import types
+
+INTRODUCTORY_PRICING_END = date(2026, 11, 30)
 
 class GeminiEnterpriseGateway:
     """
     Production API Gateway for Gemini 4 Argon and Carbon.
     Optimizes context caching layout and calculates per-request billing.
     """
-    def __init__(self, is_introductory_pricing: bool = True):
-        self.client = genai.Client(
-            api_key=os.getenv("GEMINI_API_KEY"),
-            enterprise=True,
-            project=os.getenv("GOOGLE_CLOUD_PROJECT"),
-            location="global"
-        )
+    def __init__(self, is_introductory_pricing: Optional[bool] = None):
+        self.client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+
+        if is_introductory_pricing is None:
+            is_introductory_pricing = date.today() <= INTRODUCTORY_PRICING_END
         
         if is_introductory_pricing:
             self.input_rate = 2.00
@@ -49,7 +50,6 @@ class GeminiEnterpriseGateway:
 
         config = types.GenerateContentConfig(
             system_instruction=system_instruction,
-            temperature=0.1,
             max_output_tokens=65536,
             thinking_config=types.ThinkingConfig(
                 thinking_level=thinking_level.upper()
@@ -67,14 +67,17 @@ class GeminiEnterpriseGateway:
         execution_time = time.time() - start_time
 
         usage = response.usage_metadata
-        prompt_tokens = usage.prompt_token_count if usage else 0
+        prompt_tokens = getattr(usage, "prompt_token_count", 0) or 0
         cached_tokens = getattr(usage, "cached_content_token_count", 0) or 0
         uncached_prompt_tokens = max(0, prompt_tokens - cached_tokens)
-        candidates_tokens = usage.candidates_token_count if usage else 0
+        candidates_tokens = getattr(usage, "candidates_token_count", 0) or 0
+        # Thinking is reported separately from candidates but billed at the output rate
+        thinking_tokens = getattr(usage, "thoughts_token_count", 0) or 0
+        output_tokens = candidates_tokens + thinking_tokens
 
         uncached_input_cost = (uncached_prompt_tokens / 1_000_000) * self.input_rate
         cached_input_cost = (cached_tokens / 1_000_000) * self.cached_input_rate
-        output_cost = (candidates_tokens / 1_000_000) * self.output_rate
+        output_cost = (output_tokens / 1_000_000) * self.output_rate
         total_request_cost = uncached_input_cost + cached_input_cost + output_cost
 
         return {
@@ -83,13 +86,14 @@ class GeminiEnterpriseGateway:
                 "execution_time_seconds": round(execution_time, 2),
                 "uncached_input_tokens": uncached_prompt_tokens,
                 "cached_input_tokens": cached_tokens,
-                "output_and_thinking_tokens": candidates_tokens,
+                "thinking_tokens": thinking_tokens,
+                "output_and_thinking_tokens": output_tokens,
                 "calculated_cost_usd": round(total_request_cost, 6)
             }
         }
 
 if __name__ == "__main__":
-    gateway = GeminiEnterpriseGateway(is_introductory_pricing=True)
+    gateway = GeminiEnterpriseGateway()
 
     large_repo_context = "// [Imagine 100,000 lines of C++ kernel code here...]\n" * 1000
     user_task = "Identify any memory leak risks in the buffer allocation handlers."

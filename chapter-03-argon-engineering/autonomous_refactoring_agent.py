@@ -1,40 +1,33 @@
 import os
 import time
 from google import genai
-from google.genai import types
 
-def run_autonomous_refactoring_agent(repo_path: str, task_description: str):
+def run_autonomous_refactoring_agent(
+    repo_url: str,
+    task_description: str,
+    max_total_tokens: int = 2_000_000
+) -> str:
     """
-    Spawns a Gemini 4 Argon Managed Agent to autonomously analyze,
-    refactor, and debug a local code repository.
+    Spawns the Antigravity Managed Agent, powered by Gemini 4 Argon, in a remote
+    sandbox to clone, refactor, and debug a Git repository. The agent cannot see
+    local paths, so the repository is supplied as a source of the environment.
+    Private repositories also need a credential in the environment's network allowlist.
     """
-    client = genai.Client(
-        api_key=os.getenv("GEMINI_API_KEY"),
-        enterprise=True
-    )
+    client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
-    system_instruction = """
+    target_path = "/workspace/repo"
+
+    prompt = f"""
     You are a Principal Software Engineering Agent powered by Gemini 4 Argon.
     Your objective is to refactor legacy code, optimize performance, and eliminate bugs.
-    
+
     OPERATIONAL MANDATES:
     1. Always establish a performance baseline before making code changes.
     2. Write reproducible verification scripts (cargo test / gtest).
     3. Iterate in a tight loop until all tests pass with zero regressions.
     4. Log build flags, environment quirks, and lessons learned into AGENTS.md.
-    """
 
-    config = types.GenerateContentConfig(
-        temperature=0.1,
-        max_output_tokens=1048576,
-        system_instruction=system_instruction,
-        thinking_config=types.ThinkingConfig(
-            thinking_level="HIGH"
-        )
-    )
-
-    prompt = f"""
-    TARGET REPOSITORY: {repo_path}
+    TARGET REPOSITORY: {target_path}
     TASK ASSIGNMENT: {task_description}
 
     EXECUTION STEPS:
@@ -49,26 +42,47 @@ def run_autonomous_refactoring_agent(repo_path: str, task_description: str):
     print("Launching Gemini 4 Argon Autonomous Refactoring Agent...")
     start_time = time.time()
 
-    response_stream = client.models.generate_content_stream(
-        model="gemini-4-argon",
-        contents=prompt,
-        config=config
+    interaction = client.interactions.create(
+        agent="antigravity-preview-09-2026",
+        input=prompt,
+        environment={
+            "type": "remote",
+            "sources": [
+                {"type": "repository", "source": repo_url, "target": target_path}
+            ]
+        },
+        agent_config={
+            "type": "antigravity",
+            "model": "gemini-4-argon",
+            "max_total_tokens": max_total_tokens
+        },
+        background=True
     )
 
-    for chunk in response_stream:
-        if hasattr(chunk, "text") and chunk.text:
-            print(chunk.text, end="", flush=True)
+    while interaction.status in ("in_progress", "queued"):
+        time.sleep(5)
+        interaction = client.interactions.get(id=interaction.id)
 
     elapsed_time = time.time() - start_time
-    print(f"\n\nRefactoring and verification completed in {elapsed_time:.2f} seconds.")
+
+    if interaction.status != "completed":
+        raise RuntimeError(
+            f"Agent stopped with status '{interaction.status}' after {elapsed_time:.2f} seconds."
+        )
+
+    print(interaction.output_text)
+    print(f"\n\nAgent run completed in {elapsed_time:.2f} seconds.")
+    print(f"Review its report and files in environment {interaction.environment_id} before merging.")
+
+    return interaction.output_text
 
 if __name__ == "__main__":
     migration_task = """
     Refactor src/crypto/aes_legacy.c to safe Rust in src/crypto/aes_safe.rs.
-    Ensure SIMD auto-vectorization is enabled and run performance benchmarks 
+    Ensure SIMD auto-vectorization is enabled and run performance benchmarks
     against the legacy baseline using 'cargo bench'.
     """
     run_autonomous_refactoring_agent(
-        repo_path="/workspace/security-core",
+        repo_url="https://github.com/your-org/security-core",
         task_description=migration_task
     )

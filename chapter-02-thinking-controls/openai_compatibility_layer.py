@@ -4,7 +4,8 @@ from openai import OpenAI
 # Point client to the Gemini OpenAI-compatible endpoint
 client = OpenAI(
     api_key=os.getenv("GEMINI_API_KEY"),
-    base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+    base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+    timeout=900.0  # Hard prompts can take several minutes; Google advises at least 15
 )
 
 response = client.chat.completions.create(
