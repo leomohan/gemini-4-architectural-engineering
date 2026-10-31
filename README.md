@@ -51,3 +51,13 @@ gcloud auth application-default login
 export GOOGLE_CLOUD_PROJECT="your-gcp-project-id"
 export GEMINI_CARBON_MODEL="your-carbon-model-id"
 ```
+
+## 📝 Notes on Gemini 4 API behavior
+
+- Gemini 4 Argon ignores `temperature`, `top_p` and `top_k`, and Google has said requests that set them will return errors in a future release, so the scripts leave them out.
+- Synchronous requests default to a 65,536-token output cap. Longer outputs need long decode (the Interactions API with `background=True` and a higher `max_output_tokens`); see Chapter 2 of the book.
+- Pricing constants in `cost_optimized_gateway.py` reflect Google's published rates as of October 2026. Check the Gemini API pricing page before relying on them.
+
+## 📄 License
+
+The code in this repository is released under the [MIT License](LICENSE).

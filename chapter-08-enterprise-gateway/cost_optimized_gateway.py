@@ -5,27 +5,47 @@ from typing import Dict, Any, Optional
 from google import genai
 from google.genai import types
 
+# Argon's introductory pricing ends on this date. Google has not announced
+# when Carbon's introductory period ends, so pass is_introductory_pricing
+# explicitly when costing Carbon calls.
 INTRODUCTORY_PRICING_END = date(2026, 11, 30)
+
+# USD per 1M tokens: (input, cached input, output incl. thinking).
+# Source: Gemini API pricing page, October 2026. Check it before relying on these.
+RATES = {
+    "introductory": {
+        "standard": (2.00, 0.10, 10.00),
+        "batch": (1.00, 0.05, 5.00),
+        "flex": (1.00, 0.05, 5.00),
+        "priority": (3.60, 0.18, 18.00),
+    },
+    "list": {
+        "standard": (4.00, 0.20, 20.00),
+        "batch": (2.00, 0.10, 10.00),
+        "flex": (2.00, 0.10, 10.00),
+        "priority": (7.20, 0.36, 36.00),
+    },
+}
 
 class GeminiEnterpriseGateway:
     """
     Production API Gateway for Gemini 4 Argon and Carbon.
     Optimizes context caching layout and calculates per-request billing.
     """
-    def __init__(self, is_introductory_pricing: Optional[bool] = None):
+    def __init__(self, is_introductory_pricing: Optional[bool] = None, tier: str = "standard"):
         self.client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
         if is_introductory_pricing is None:
             is_introductory_pricing = date.today() <= INTRODUCTORY_PRICING_END
-        
-        if is_introductory_pricing:
-            self.input_rate = 2.00
-            self.output_rate = 10.00
-            self.cached_input_rate = 0.10
-        else:
-            self.input_rate = 4.00
-            self.output_rate = 20.00
-            self.cached_input_rate = 0.20
+
+        period = "introductory" if is_introductory_pricing else "list"
+        if tier not in RATES[period]:
+            raise ValueError(f"Unknown tier '{tier}'. Choose one of: {list(RATES[period])}")
+
+        # This gateway sends synchronous requests, so only standard or priority
+        # describe its own calls; batch and flex rates are here for estimates.
+        self.tier = tier
+        self.input_rate, self.cached_input_rate, self.output_rate = RATES[period][tier]
 
     def execute_cached_engineering_task(
         self, 

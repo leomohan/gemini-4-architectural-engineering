@@ -21,10 +21,10 @@ def run_automated_patching_pipeline(vulnerable_file_path: str, crash_report_path
         location="global"
     )
 
-    with open(vulnerable_file_path, "r") as f:
+    with open(vulnerable_file_path, "r", encoding="utf-8", errors="replace") as f:
         source_code = f.read()
 
-    with open(crash_report_path, "r") as f:
+    with open(crash_report_path, "r", encoding="utf-8", errors="replace") as f:
         crash_log = f.read()
 
     system_rules = """
@@ -57,7 +57,6 @@ def run_automated_patching_pipeline(vulnerable_file_path: str, crash_report_path
 
     config = types.GenerateContentConfig(
         system_instruction=system_rules,
-        temperature=0.0,
         thinking_config=types.ThinkingConfig(
             thinking_level="HIGH"
         )
