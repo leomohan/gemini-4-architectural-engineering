@@ -15,7 +15,10 @@ def run_deep_reasoning_task(prompt_text: str, reasoning_tier: str = "HIGH"):
         raise ValueError(f"Invalid level. Argon requires one of: {valid_levels}")
 
     config = types.GenerateContentConfig(
-        max_output_tokens=262144,
+        # 65,536 is the synchronous default cap for Gemini 4 Argon. Outputs above
+        # 64K need long decode: the Interactions API with background=True and a
+        # higher max_output_tokens (see Chapter 2, section 2.2).
+        max_output_tokens=65536,
         thinking_config=types.ThinkingConfig(
             thinking_level=reasoning_tier.upper()
         )

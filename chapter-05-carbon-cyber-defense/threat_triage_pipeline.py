@@ -17,10 +17,10 @@ def execute_cyber_threat_triage(source_code_path: str, telemetry_log_path: str):
         location="global"
     )
 
-    with open(source_code_path, "r") as code_file:
+    with open(source_code_path, "r", encoding="utf-8", errors="replace") as code_file:
         source_code = code_file.read()
 
-    with open(telemetry_log_path, "r") as log_file:
+    with open(telemetry_log_path, "r", encoding="utf-8", errors="replace") as log_file:
         telemetry_logs = log_file.read()
 
     system_rules = """
@@ -52,7 +52,6 @@ def execute_cyber_threat_triage(source_code_path: str, telemetry_log_path: str):
 
     config = types.GenerateContentConfig(
         system_instruction=system_rules,
-        temperature=0.0,
         response_mime_type="application/json",
         thinking_config=types.ThinkingConfig(
             thinking_level="HIGH"
